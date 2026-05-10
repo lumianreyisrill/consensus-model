@@ -32,6 +32,11 @@ consensus --mode code --prompt "Review this function" --file src/app.rs
            ┌─────────────────┐
            │  Synthesis      │  Merge best parts
            │  (Round 3)      │  into final answer
+           └────────┬────────┘
+                    ▼
+           ┌─────────────────┐
+           │  History DB     │  Track model accuracy
+           │  (auto-log)     │  Weighted voting over time
            └─────────────────┘
 ```
 
@@ -49,8 +54,8 @@ consensus --mode code --prompt "Review this function" --file src/app.rs
 
 ```bash
 # From source (requires Rust 1.75+)
-git clone https://github.com/YOUR_USERNAME/consensus.git
-cd consensus
+git clone https://github.com/lumianreyisrill/consensus-model.git
+cd consensus-model
 cargo install --path .
 
 # Binary will be at ~/.cargo/bin/consensus
@@ -72,6 +77,7 @@ temperature = 0.3
 max_tokens = 4096
 timeout_secs = 120
 max_retries = 2
+history_db_path = "~/.config/consensus/history.db"  # optional
 
 [[providers]]
 name = "gpt"
@@ -120,15 +126,48 @@ consensus --mode code --prompt "Review" --file app.py --output json | jq '.synth
 
 # Use specific providers only
 consensus --mode quick --prompt "Hello" --providers gpt,claude
+
+# Streaming output (real-time tokens as they arrive)
+consensus --mode quick --prompt "Hello" --stream
 ```
+
+## Scoreboard & History
+
+Consensus automatically tracks model accuracy across debates using a local SQLite database.
+
+```bash
+# View model scoreboard — which model is most accurate
+consensus scoreboard
+
+# Output:
+# Provider  Score  Debates  Best  Issues Found  Issues Received
+# ──────────────────────────────────────────────────────────────
+# gpt        72.3     15      8       42             12
+# claude     68.1     15      5       38             18
+# deepseek   45.0     15      2       25             30
+
+# View debate history
+consensus history
+consensus history --limit 20
+consensus history --provider gpt
+```
+
+**Score formula:** `(times_best × 3 + (debates - issues_received) × 2) / max(debates × 5, 1) × 100`
+
+**Weighted voting:** After enough debates, the synthesis round automatically picks the highest-scoring model to produce the final answer.
+
+**BEST detection:** The synthesis model ranks which initial response was most accurate. This feedback loops into scoring.
 
 ## CLI Reference
 
 ```
 consensus [OPTIONS] --prompt <PROMPT>
+consensus scoreboard
+consensus history [--limit N] [--provider NAME]
 
 Options:
-  -m, --mode <MODE>          Debate mode [default: code] [possible: quick, general, code, debug, adversarial]
+  -m, --mode <MODE>          Debate mode [default: code]
+                               [possible: quick, general, code, debug, adversarial]
   -p, --prompt <PROMPT>      Prompt/question for the models
   -f, --file <FILE>          File to include in the prompt (code, logs, etc)
       --stdin                Read additional input from stdin
@@ -138,6 +177,7 @@ Options:
       --temperature <TEMP>   Temperature (0.0-2.0) [default: 0.3]
       --max-tokens <N>       Max tokens per response [default: 4096]
   -q, --quiet                Suppress progress output
+      --stream               Enable streaming output for Round 1 responses
       --init                 Create example config file
 ```
 
@@ -173,11 +213,13 @@ Rich terminal output with colors, progress indicators, and collapsible sections.
 
 ```
 src/
-├── main.rs      # CLI entry, config loading, I/O handling
-├── cli.rs       # Clap argument parsing, mode/output enums
-├── config.rs    # TOML config parsing, provider management
-├── debate.rs    # Debate pipeline orchestration (3 rounds)
-└── api.rs       # OpenAI-compatible HTTP client, SSE parser
+├── main.rs       # CLI entry, subcommand routing, config loading
+├── cli.rs        # Clap argument parsing, subcommands, mode/output enums
+├── config.rs     # TOML config parsing, provider management
+├── debate.rs     # 3-round debate pipeline + scoring integration
+├── api.rs        # OpenAI-compatible HTTP client, SSE parser, retry logic
+├── history.rs    # SQLite history DB, model scoring, audit tracking
+└── stream.rs     # Real-time SSE streaming output
 ```
 
 **Key design decisions:**
@@ -186,6 +228,8 @@ src/
 - **Retry with backoff** — exponential delay on transient failures (429, 5xx)
 - **UTF-8 safe** truncation for error messages
 - **No vendor lock-in** — works with any OpenAI-compatible endpoint
+- **SQLite history** — local model scoring with weighted voting
+- **Feature-gated** — `rusqlite` is optional (`--no-default-features` to build without history)
 
 ## Use Cases
 
@@ -198,8 +242,7 @@ src/
 ## Requirements
 
 - Rust 1.75+
-- At least 2 AI provider API keys
-- Any OpenAI-compatible API endpoint
+- At least 2 OpenAI-compatible API providers configured
 
 ## License
 
