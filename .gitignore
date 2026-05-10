@@ -1,0 +1,28 @@
+# Build artifacts
+/target/
+*.o
+*.d
+*.rlib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (contains API keys)
+config.toml
+!config.example.toml
+
+# History DB (local data)
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log

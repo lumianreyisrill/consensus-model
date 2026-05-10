@@ -1,0 +1,36 @@
+[package]
+name = "consensus"
+version = "0.2.0"
+edition = "2021"
+description = "Multi-model AI debate engine — dispatch, cross-audit, synthesize consensus"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/placeholder/consensus"
+keywords = ["ai", "llm", "debate", "consensus", "multi-model"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+indicatif = "0.17"
+futures = "0.3"
+anyhow = "1"
+dirs = "5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.31", features = ["bundled"], optional = true }
+
+[features]
+default = ["history"]
+history = ["rusqlite"]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1
